@@ -136,7 +136,7 @@ int main()
 	int selected_slot = 0;
 	int selected_iron_version = 1;
 
-	int firmware_version[firmware_length] = {0, 0, 9, 0, 0};
+	int firmware_version[firmware_length] = {0, 1, 1, 0, 0};
 	int firmware_selected_value = 0;
 	
 	static char payload_name[256];
