@@ -89,4 +89,6 @@ const int firmware_format_offsets[] = {3, 9, 11, 13, 16};
 #define firmware_output_format "%s %s-%s-%s %s"
 #define firmware_length 5
 
+#define highest_10_x_firmware 1
+
 #endif

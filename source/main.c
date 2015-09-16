@@ -27,10 +27,10 @@ Result FSUSER_ControlArchive(Handle handle, FS_archive archive)
 	cmdbuf[7]=(u32)&b1;
 	cmdbuf[8]=0x1c;
 	cmdbuf[9]=(u32)&b2;
- 
+
 	Result ret=0;
 	if((ret=svcSendSyncRequest(handle)))return ret;
- 
+
 	return cmdbuf[1];
 }
 
@@ -138,7 +138,7 @@ int main()
 
 	int firmware_version[firmware_length] = {0, 1, 1, 0, 0};
 	int firmware_selected_value = 0;
-	
+
 	static char payload_name[256];
 	u8* payload_buf = NULL;
 	u32 payload_size = 0;
@@ -239,11 +239,13 @@ int main()
 
 					if(firmware_version[firmware_selected_value] < 0) firmware_version[firmware_selected_value] = 0;
 					if(firmware_version[firmware_selected_value] >= firmware_num_values[firmware_selected_value]) firmware_version[firmware_selected_value] = firmware_num_values[firmware_selected_value] - 1;
-					
+
+					if(firmware_version[1] == 1 && firmware_version[2] > highest_10_x_firmware) firmware_version[2] = highest_10_x_firmware;
+
 					if(hidKeysDown() & KEY_A)next_state = STATE_DOWNLOAD_PAYLOAD;
 
 					int offset = 28 + firmware_format_offsets[firmware_selected_value];
-					printf((firmware_version[firmware_selected_value] < firmware_num_values[firmware_selected_value] - 1) ? "%*s^%*s" : "%*s-%*s", offset, " ", 50 - offset - 1, " ");
+					printf((firmware_version[firmware_selected_value] < firmware_num_values[firmware_selected_value] - 1) && !(firmware_selected_value == 2 && firmware_version[2] == highest_10_x_firmware) ? "%*s^%*s" : "%*s-%*s", offset, " ", 50 - offset - 1, " ");
 					printf("        Selected firmware : " "%s %s-%s-%s %s" "\n", firmware_labels[0][firmware_version[0]], firmware_labels[1][firmware_version[1]], firmware_labels[2][firmware_version[2]], firmware_labels[3][firmware_version[3]], firmware_labels[4][firmware_version[4]]);
 					printf((firmware_version[firmware_selected_value] > 0) ? "%*sv%*s" : "%*s-%*s", offset, " ", 50 - offset - 1, " ");
 				}
@@ -299,7 +301,7 @@ int main()
 						break;
 					}
 
-					next_state = STATE_INSTALLED_PAYLOAD;	
+					next_state = STATE_INSTALLED_PAYLOAD;
 				}
 				break;
 			case STATE_INSTALLED_PAYLOAD:
