@@ -75,6 +75,30 @@ typedef enum
 	STATE_ERROR,
 }state_t;
 
+Result http_getredirection(char *url, char *out, u32 out_size)
+{
+	Result ret=0;
+	httpcContext context;
+
+	ret = httpcOpenContext(&context, url, 0);
+	if(ret!=0)return ret;
+
+
+	ret = httpcAddRequestHeaderField(&context, "User-Agent", "ironhax");
+	if(!ret) ret = httpcBeginRequest(&context);
+	if(ret!=0)
+	{
+		httpcCloseContext(&context);
+		return ret;
+	}
+
+	ret = httpcGetResponseHeader(&context, "Location", out, out_size);
+
+	httpcCloseContext(&context);
+
+	return 0;
+}
+
 Result http_download(httpcContext *context, u8** out_buf, u32* out_size)
 {
 	Result ret=0;
@@ -111,6 +135,7 @@ Result http_download(httpcContext *context, u8** out_buf, u32* out_size)
 	return 0;
 }
 
+
 int main()
 {
 	httpcInit();
@@ -118,7 +143,7 @@ int main()
 	gfxInitDefault();
 	gfxSet3D(false);
 
-	Result ret = filesystemInit();
+	filesystemInit();
 
 	PrintConsole topConsole, bttmConsole;
 	consoleInit(GFX_TOP, &topConsole);
@@ -139,7 +164,6 @@ int main()
 	int firmware_version[firmware_length] = {0, 1, 1, 0, 0};
 	int firmware_selected_value = 0;
 	
-	static char payload_name[256];
 	u8* payload_buf = NULL;
 	u32 payload_size = 0;
 
@@ -166,8 +190,7 @@ int main()
 					strcat(top_text, "\n\n\n Please select your console's firmware version.\nOnly select NEW 3DS if you own a New 3DS (XL).\nD-Pad to select, A to continue.\n");
 					break;
 				case STATE_DOWNLOAD_PAYLOAD:
-					getPayloadName(firmware_version, payload_name);
-					sprintf(top_text, "%s\n\n\n Downloading payload... %s\n", top_text, payload_name);
+					sprintf(top_text, "%s\n\n\n Downloading payload...\n", top_text);
 					break;
 				case STATE_COMPRESS_PAYLOAD:
 					strcat(top_text, " Processing payload...\n");
@@ -251,10 +274,19 @@ int main()
 			case STATE_DOWNLOAD_PAYLOAD:
 				{
 					httpcContext context;
-					static char url[512];
-					sprintf(url, "http://smealum.github.io/ninjhax2/Pvl9iD2Im5/otherapp/%s.bin", payload_name);
+					static char in_url[512];
+					static char out_url[512];
+					sprintf(in_url, "http://smea.mtheall.com/get_payload.php?version=%s-%s-%s-%s-0-%s", firmware_labels_url[0][firmware_version[0]], firmware_labels_url[1][firmware_version[1]], firmware_labels_url[2][firmware_version[2]], firmware_labels_url[3][firmware_version[3]], firmware_labels_url[4][firmware_version[4]]);
 
-					Result ret = httpcOpenContext(&context, url, 0);
+					Result ret = http_getredirection(in_url, out_url, 512);
+					if(ret)
+					{
+						sprintf(status, "Failed to grab payload url\n    Error code : %08X", (unsigned int)ret);
+						next_state = STATE_ERROR;
+						break;
+					}
+
+					ret = httpcOpenContext(&context, out_url, 0);
 					if(ret)
 					{
 						sprintf(status, "Failed to open http context\n    Error code : %08X", (unsigned int)ret);
@@ -288,6 +320,13 @@ int main()
 						next_state = STATE_ERROR;
 						break;
 					}
+				}
+
+				{
+					// delete file
+					FSUSER_DeleteFile(&saveGameFsHandle, saveGameArchive, FS_makePath(PATH_CHAR, "/payload.bin"));
+
+					FSUSER_ControlArchive(saveGameFsHandle, saveGameArchive);
 				}
 
 				{
