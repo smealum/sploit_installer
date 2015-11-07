@@ -159,13 +159,20 @@ int main()
 	top_text[0] = '\0';
 
 	int selected_slot = 0;
-	int selected_iron_version = 1;
+	int selected_iron_version = 0;
 
 	int firmware_version[firmware_length] = {0, 1, 1, 0, 0};
 	int firmware_selected_value = 0;
 	
 	u8* payload_buf = NULL;
 	u32 payload_size = 0;
+
+	u32 cur_processid = 0;
+	u64 cur_programid = 0;
+	u64 cur_programid_update = 0;
+	u8 update_mediatype = 1;
+	FS_ProductInfo cur_productinfo;
+	TitleList title_entry;
 
 	while (aptMainLoop())
 	{
@@ -184,7 +191,7 @@ int main()
 					strcat(top_text, " Please select the savegame slot IRONHAX will be\ninstalled to. D-Pad to select, A to continue.\n");
 					break;
 				case STATE_SELECT_IRON_VERSION:
-					strcat(top_text, "\n\n\n Please select the version of IRONFALL you have\ninstalled. D-Pad to select, A to continue.\n");
+					strcat(top_text, "\n\n\n The version of IRONFALL you have installed\nwill now be auto-detected.\n");
 					break;
 				case STATE_SELECT_FIRMWARE:
 					strcat(top_text, "\n\n\n Please select your console's firmware version.\nOnly select NEW 3DS if you own a New 3DS (XL).\nD-Pad to select, A to continue.\n");
@@ -237,16 +244,70 @@ int main()
 				break;
 			case STATE_SELECT_IRON_VERSION:
 				{
-					if(hidKeysDown() & KEY_UP)selected_iron_version++;
-					if(hidKeysDown() & KEY_DOWN)selected_iron_version--;
 					if(hidKeysDown() & KEY_A)next_state = STATE_SELECT_FIRMWARE;
 
-					if(selected_iron_version < 0) selected_iron_version = 0;
-					if(selected_iron_version > 1) selected_iron_version = 1;
+					Result ret = svcGetProcessId(&cur_processid, 0xffff8001);
+					if(ret<0)
+					{
+						snprintf(status, sizeof(status)-1, "Failed to get the processID for the current process.\n    Error code : %08X", (unsigned int)ret);
+						next_state = STATE_ERROR;
+						break;
+					}
 
-					printf((selected_iron_version >= 1) ? "                                             \n" : "                                             ^\n");
-					printf("                Selected IRONFALL version : 1.%d  \n", selected_iron_version);
-					printf((!selected_iron_version) ? "                                             \n" : "                                             v\n");
+					ret = FSUSER_GetProductInfo(NULL, cur_processid, &cur_productinfo);
+					if(ret<0)
+					{
+						snprintf(status, sizeof(status)-1, "Failed to get the ProductInfo for the current process.\n    Error code : %08X", (unsigned int)ret);
+						next_state = STATE_ERROR;
+						break;
+					}
+
+					aptOpenSession();
+					ret = APT_GetProgramID(NULL, &cur_programid);
+					aptCloseSession();
+
+					if(ret<0)
+					{
+						snprintf(status, sizeof(status)-1, "Failed to get the programID for the current process.\n    Error code : %08X", (unsigned int)ret);
+						next_state = STATE_ERROR;
+						break;
+					}
+
+					if(((cur_programid >> 32) & 0xffff) == 0)cur_programid_update = cur_programid | 0x0000000e00000000ULL;//Only set the update-title programid when the cur_programid is for a regular application title.
+
+					if(cur_productinfo.remaster_version>=2)
+					{
+						snprintf(status, sizeof(status)-1, "this regular-title remaster-version(%u) of ironfall is not compatible with ironhax, sorry\n", cur_productinfo.remaster_version);
+						next_state = STATE_ERROR;
+						break;
+					}
+
+					if(cur_programid_update)
+					{
+						ret = amInit();
+						if(ret<0)
+						{
+							snprintf(status, sizeof(status)-1, "Failed to initialize AM.\n    Error code : %08X", (unsigned int)ret);
+							next_state = STATE_ERROR;
+							break;
+						}
+
+						ret = AM_ListTitles(update_mediatype, 1, &cur_programid_update, &title_entry);
+						amExit();
+						if(ret==0)
+						{
+							if(title_entry.titleVersion != 1040)
+							{
+								snprintf(status, sizeof(status)-1, "this update-title version(%u) of ironfall is not compatible with ironhax, sorry\n", title_entry.titleVersion);
+								next_state = STATE_ERROR;
+								break;
+							}
+
+							selected_iron_version = 1;
+						}
+					}
+
+					printf("           Auto-detected IRONFALL version : 1.%d  \n    Press A to continue.", selected_iron_version);
 				}
 				break;
 			case STATE_SELECT_FIRMWARE:
