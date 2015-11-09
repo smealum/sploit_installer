@@ -6,10 +6,19 @@
 
 #include "filesystem.h"
 #include "blz.h"
-#include "firmware.h"
 #include "savegame_data.h"
 
 char status[256];
+
+char regionids_table[7][4] = {//http://3dbrew.org/wiki/Nandrw/sys/SecureInfo_A
+"JPN",
+"USA",
+"EUR",
+"JPN", //"AUS"
+"CHN",
+"KOR",
+"TWN"
+};
 
 Result FSUSER_ControlArchive(Handle handle, FS_archive archive)
 {
@@ -161,8 +170,12 @@ int main()
 	int selected_slot = 0;
 	int selected_iron_version = 0;
 
-	int firmware_version[firmware_length] = {0, 1, 1, 0, 0};
+	int firmware_version[6];
 	int firmware_selected_value = 0;
+	int firmware_version_autodetected = 0;
+	int firmware_maxnum;
+
+	int pos;
 	
 	u8* payload_buf = NULL;
 	u32 payload_size = 0;
@@ -173,6 +186,12 @@ int main()
 	u8 update_mediatype = 1;
 	FS_ProductInfo cur_productinfo;
 	TitleList title_entry;
+
+	OS_VersionBin nver_versionbin, cver_versionbin;
+	u8 region=0;
+	u8 new3dsflag = 0;
+
+	memset(firmware_version, 0, sizeof(firmware_version));
 
 	while (aptMainLoop())
 	{
@@ -316,19 +335,75 @@ int main()
 					if(hidKeysDown() & KEY_RIGHT)firmware_selected_value++;
 
 					if(firmware_selected_value < 0) firmware_selected_value = 0;
-					if(firmware_selected_value >= firmware_length) firmware_selected_value = firmware_length - 1;
+					if(firmware_selected_value > 5) firmware_selected_value = 5;
 
 					if(hidKeysDown() & KEY_UP)firmware_version[firmware_selected_value]++;
 					if(hidKeysDown() & KEY_DOWN)firmware_version[firmware_selected_value]--;
 
+					firmware_maxnum = 256;
+					if(firmware_selected_value==0)firmware_maxnum = 2;
+					if(firmware_selected_value==5)firmware_maxnum = 7;
+
 					if(firmware_version[firmware_selected_value] < 0) firmware_version[firmware_selected_value] = 0;
-					if(firmware_version[firmware_selected_value] >= firmware_num_values[firmware_selected_value]) firmware_version[firmware_selected_value] = firmware_num_values[firmware_selected_value] - 1;
-					
+					if(firmware_version[firmware_selected_value] >= firmware_maxnum) firmware_version[firmware_selected_value] = firmware_maxnum - 1;
+
 					if(hidKeysDown() & KEY_A)next_state = STATE_DOWNLOAD_PAYLOAD;
 
-					int offset = 28 + firmware_format_offsets[firmware_selected_value];
-					printf((firmware_version[firmware_selected_value] < firmware_num_values[firmware_selected_value] - 1) ? "%*s^%*s" : "%*s-%*s", offset, " ", 50 - offset - 1, " ");
-					printf("        Selected firmware : " "%s %s-%s-%s %s" "\n", firmware_labels[0][firmware_version[0]], firmware_labels[1][firmware_version[1]], firmware_labels[2][firmware_version[2]], firmware_labels[3][firmware_version[3]], firmware_labels[4][firmware_version[4]]);
+					if(firmware_version_autodetected==0)
+					{
+						Result ret = osGetSystemVersionData(&nver_versionbin, &cver_versionbin);
+						if(ret<0)
+						{
+							snprintf(status, sizeof(status)-1, "Failed to get the system-version.\n    Error code : %08X", (unsigned int)ret);
+							next_state = STATE_ERROR;
+							break;
+						}
+
+						ret = initCfgu();
+						if(ret<0)
+						{
+							snprintf(status, sizeof(status)-1, "Failed to initialize cfgu.\n    Error code : %08X", (unsigned int)ret);
+							next_state = STATE_ERROR;
+							break;
+						}
+
+						ret = CFGU_SecureInfoGetRegion(&region);
+						if(ret<0)
+						{
+							snprintf(status, sizeof(status)-1, "Failed to get the system region.\n    Error code : %08X", (unsigned int)ret);
+							next_state = STATE_ERROR;
+							break;
+						}
+
+						exitCfgu();
+
+						APT_CheckNew3DS(NULL, &new3dsflag);
+
+						firmware_version[0] = new3dsflag;
+						firmware_version[5] = region;
+
+						firmware_version[1] = cver_versionbin.mainver;
+						firmware_version[2] = cver_versionbin.minor;
+						firmware_version[3] = cver_versionbin.build;
+						firmware_version[4] = nver_versionbin.mainver;
+
+						firmware_version_autodetected = 1;
+					}
+
+					int offset = 26;
+					if(firmware_selected_value)
+					{
+						offset+= 7;
+
+						for(pos=1; pos<firmware_selected_value; pos++)
+						{
+							offset+=2;
+							if(firmware_version[pos] >= 10)offset++;
+						}
+					}
+
+					printf((firmware_version[firmware_selected_value] < firmware_maxnum - 1) ? "%*s^%*s" : "%*s-%*s", offset, " ", 50 - offset - 1, " ");
+					printf("      Selected firmware : %s %d-%d-%d-%d %s  \n", firmware_version[0]?"New3DS":"Old3DS", firmware_version[1], firmware_version[2], firmware_version[3], firmware_version[4], regionids_table[firmware_version[5]]);
 					printf((firmware_version[firmware_selected_value] > 0) ? "%*sv%*s" : "%*s-%*s", offset, " ", 50 - offset - 1, " ");
 				}
 				break;
@@ -337,7 +412,15 @@ int main()
 					httpcContext context;
 					static char in_url[512];
 					static char out_url[512];
-					sprintf(in_url, "http://smea.mtheall.com/get_payload.php?version=%s-%s-%s-%s-0-%s", firmware_labels_url[0][firmware_version[0]], firmware_labels_url[1][firmware_version[1]], firmware_labels_url[2][firmware_version[2]], firmware_labels_url[3][firmware_version[3]], firmware_labels_url[4][firmware_version[4]]);
+
+					if(firmware_version[5]!=1 && firmware_version[5]!=2)
+					{
+						snprintf(status, sizeof(status)-1, "The specified region is not supported by ironhax.\n");
+						next_state = STATE_ERROR;
+						break;
+					}
+
+					sprintf(in_url, "http://smea.mtheall.com/get_payload.php?version=%s-%d-%d-%d-%d-%s", firmware_version[0]?"NEW":"OLD", firmware_version[1], firmware_version[2], firmware_version[3], firmware_version[4], regionids_table[firmware_version[5]]);
 
 					Result ret = http_getredirection(in_url, out_url, 512);
 					if(ret)
@@ -374,7 +457,7 @@ int main()
 				{
 					static char filename[128];
 					sprintf(filename, "/Data%d", selected_slot);
-					Result ret = write_savedata(filename, getSavegameData(firmware_version, selected_iron_version, selected_slot), 0x2000);
+					Result ret = write_savedata(filename, getSavegameData(firmware_version[5], firmware_version[0], selected_iron_version, selected_slot), 0x2000);
 					if(ret)
 					{
 						sprintf(status, "Failed to install %s.\n    Error code : %08X", filename, (unsigned int)ret);

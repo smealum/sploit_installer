@@ -83,9 +83,9 @@ const u8* savegame_data[3][4][2] = {
 	}
 };
 
-static u8* getSavegameData(int v[], int iron_version, int iron_slot)
+static u8* getSavegameData(CFG_Region region, u8 new3dsflag, int iron_version, int iron_slot)
 {
-	return (u8*)savegame_data[iron_slot][iron_version * 2 + (v[4] == FW_REGION_EUR)][!v[0]];
+	return (u8*)savegame_data[iron_slot][iron_version * 2 + (region == CFG_REGION_EUR)][!new3dsflag];
 }
 
 #endif
