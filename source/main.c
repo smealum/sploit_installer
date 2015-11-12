@@ -821,13 +821,6 @@ int main()
 					static char in_url[512];
 					static char out_url[512];
 
-					if(firmware_version[5]!=1 && firmware_version[5]!=2)
-					{
-						snprintf(status, sizeof(status)-1, "The specified region is not supported by %s.\n", exploitname);
-						next_state = STATE_ERROR;
-						break;
-					}
-
 					sprintf(in_url, "http://smea.mtheall.com/get_payload.php?version=%s-%d-%d-%d-%d-%s", firmware_version[0]?"NEW":"OLD", firmware_version[1], firmware_version[2], firmware_version[3], firmware_version[4], regionids_table[firmware_version[5]]);
 
 					memset(useragent, 0, sizeof(useragent));
