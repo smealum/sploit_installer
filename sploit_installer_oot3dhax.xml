@@ -1,0 +1,12 @@
+<shortcut>
+	<executable>/3ds/sploit_installer/sploit_installer.3dsx</executable>
+	<icon>/3ds/sploit_installer_oot3dhax.smdh</icon>
+</shortcut>
+<targets selectable="false">
+	<title mediatype="2">0004000000033400</title>
+	<title mediatype="2">0004000000033500</title>
+	<title mediatype="2">0004000000033600</title>
+	<title mediatype="1">0004000000033400</title>
+	<title mediatype="1">0004000000033500</title>
+	<title mediatype="1">0004000000033600</title>
+</targets>

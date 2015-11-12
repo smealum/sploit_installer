@@ -17,6 +17,7 @@ include $(DEVKITARM)/3ds_rules
 # INCLUDES is a list of directories containing header files
 #
 # NO_SMDH: if set to anything, no SMDH file is generated.
+# ROMFS is the directory which contains the RomFS, relative to the Makefile (Optional)
 # APP_TITLE is the name of the app stored in the SMDH file (Optional)
 # APP_DESCRIPTION is the description of the app stored in the SMDH file (Optional)
 # APP_AUTHOR is the author of the app stored in the SMDH file (Optional)
@@ -31,10 +32,11 @@ BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
+ROMFS	:=	romfs
 
 APP_TITLE       := ironhax installer
 APP_DESCRIPTION := Use this to install ironhax to your system. Requires    IronFall and an internet connection.
-APP_AUTHOR      := smea
+APP_AUTHOR      := smea and yellows8
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -119,6 +121,10 @@ endif
 
 ifeq ($(strip $(NO_SMDH)),)
 	export _3DSXFLAGS += --smdh=$(CURDIR)/$(TARGET).smdh
+endif
+
+ifneq ($(ROMFS),)
+	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
 .PHONY: $(BUILD) clean all
