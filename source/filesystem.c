@@ -30,6 +30,8 @@ Result filesystemExit(void)
 	Result ret = FSUSER_CloseArchive(&saveGameArchive);
         ret |= FSUSER_CloseArchive(&sdmcArchive); //Or-ing error so that if for some reason the first one fails but the second doesn't, we get something back at least.
 
+	FSUSER_CloseArchive(&saveGameArchive);
+	FSUSER_CloseArchive(&sdmcArchive);
         fsEndUseSession();
 
 	return ret;
