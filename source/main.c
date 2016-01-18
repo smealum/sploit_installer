@@ -21,29 +21,6 @@ char regionids_table[7][4] = {//http://3dbrew.org/wiki/Nandrw/sys/SecureInfo_A
 "TWN"
 };
 
-Result FSUSER_ControlArchive(Handle handle, FS_archive archive)
-{
-	u32* cmdbuf=getThreadCommandBuffer();
-
-	u32 b1 = 0, b2 = 0;
-
-	cmdbuf[0]=0x080d0144;
-	cmdbuf[1]=archive.handleLow;
-	cmdbuf[2]=archive.handleHigh;
-	cmdbuf[3]=0x0;
-	cmdbuf[4]=0x1; //buffer1 size
-	cmdbuf[5]=0x1; //buffer1 size
-	cmdbuf[6]=0x1a;
-	cmdbuf[7]=(u32)&b1;
-	cmdbuf[8]=0x1c;
-	cmdbuf[9]=(u32)&b2;
- 
-	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
- 
-	return cmdbuf[1];
-}
-
 Result write_savedata(char* path, u8* data, u32 size)
 {
 	if(!path || !data || !size)return -1;
@@ -53,7 +30,7 @@ Result write_savedata(char* path, u8* data, u32 size)
 	Result ret = 0;
 	int fail = 0;
 
-	ret = FSUSER_OpenFile(&saveGameFsHandle, &outFileHandle, saveGameArchive, FS_makePath(PATH_CHAR, path), FS_OPEN_CREATE | FS_OPEN_WRITE, FS_ATTRIBUTE_NONE);
+	ret = FSUSER_OpenFile(&outFileHandle, saveGameArchive, fsMakePath(PATH_ASCII, path), FS_OPEN_CREATE | FS_OPEN_WRITE, 0);
 	if(ret){fail = -8; goto writeFail;}
 
 	ret = FSFILE_Write(outFileHandle, &bytesWritten, 0x0, data, size, 0x10001);
@@ -62,7 +39,7 @@ Result write_savedata(char* path, u8* data, u32 size)
 	ret = FSFILE_Close(outFileHandle);
 	if(ret){fail = -10; goto writeFail;}
 
-	ret = FSUSER_ControlArchive(saveGameFsHandle, saveGameArchive);
+	ret = FSUSER_ControlArchive(saveGameArchive, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
 
 	writeFail:
 	if(fail)sprintf(status, "failed to write to file : %d\n     %08X %08X", fail, (unsigned int)ret, (unsigned int)bytesWritten);
@@ -545,7 +522,7 @@ int main()
 	u8 update_mediatype = 1;
 	u32 updatetitle_entry_valid = 0;
 	FS_ProductInfo cur_productinfo;
-	TitleList title_entry;
+	AM_TitleEntry title_entry;
 
 	OS_VersionBin nver_versionbin, cver_versionbin;
 	u8 region=0;
@@ -628,15 +605,15 @@ int main()
 			case STATE_INITIALIZE:
 				{
 					Result ret = osGetSystemVersionData(&nver_versionbin, &cver_versionbin);
-					if(ret<0)
+					if(R_FAILED(ret))
 					{
 						snprintf(status, sizeof(status)-1, "Failed to get the system-version.\n    Error code : %08X", (unsigned int)ret);
 						next_state = STATE_ERROR;
 						break;
 					}
 
-					ret = initCfgu();
-					if(ret<0)
+					ret = cfguInit();
+					if(R_FAILED(ret))
 					{
 						snprintf(status, sizeof(status)-1, "Failed to initialize cfgu.\n    Error code : %08X", (unsigned int)ret);
 						next_state = STATE_ERROR;
@@ -644,16 +621,16 @@ int main()
 					}
 
 					ret = CFGU_SecureInfoGetRegion(&region);
-					if(ret<0)
+					if(R_FAILED(ret))
 					{
 						snprintf(status, sizeof(status)-1, "Failed to get the system region.\n    Error code : %08X", (unsigned int)ret);
 						next_state = STATE_ERROR;
 						break;
 					}
 
-					exitCfgu();
+					cfguExit();
 
-					APT_CheckNew3DS(NULL, &new3dsflag);
+					APT_CheckNew3DS(&new3dsflag);
 
 					firmware_version[0] = new3dsflag;
 					firmware_version[5] = region;
@@ -664,15 +641,17 @@ int main()
 					firmware_version[4] = nver_versionbin.mainver;
 
 					ret = svcGetProcessId(&cur_processid, 0xffff8001);
-					if(ret<0)
+					if(R_FAILED(ret))
 					{
 						snprintf(status, sizeof(status)-1, "Failed to get the processID for the current process.\n    Error code : %08X", (unsigned int)ret);
 						next_state = STATE_ERROR;
 						break;
 					}
 
-					ret = FSUSER_GetProductInfo(NULL, cur_processid, &cur_productinfo);
-					if(ret<0)
+					enableHBLHandle();
+					ret = FSUSER_GetProductInfo(&cur_productinfo, cur_processid);
+					disableHBLHandle();
+					if(R_FAILED(ret))
 					{
 						snprintf(status, sizeof(status)-1, "Failed to get the ProductInfo for the current process.\n    Error code : %08X", (unsigned int)ret);
 						next_state = STATE_ERROR;
@@ -680,10 +659,10 @@ int main()
 					}
 
 					aptOpenSession();
-					ret = APT_GetProgramID(NULL, &cur_programid);
+					ret = APT_GetProgramID(&cur_programid);
 					aptCloseSession();
 
-					if(ret<0)
+					if(R_FAILED(ret))
 					{
 						snprintf(status, sizeof(status)-1, "Failed to get the programID for the current process.\n    Error code : %08X", (unsigned int)ret);
 						next_state = STATE_ERROR;
@@ -695,7 +674,7 @@ int main()
 					if(cur_programid_update)
 					{
 						ret = amInit();
-						if(ret<0)
+						if(R_FAILED(ret))
 						{
 							snprintf(status, sizeof(status)-1, "Failed to initialize AM.\n    Error code : %08X", (unsigned int)ret);
 							next_state = STATE_ERROR;
@@ -728,7 +707,7 @@ int main()
 						break;
 					}
 
-					ret = load_exploitconfig(exploitname, &cur_programid, cur_productinfo.remaster_version, updatetitle_entry_valid ? &title_entry.titleVersion:NULL, &selected_remaster_version, versiondir, displayversion);
+					ret = load_exploitconfig(exploitname, &cur_programid, cur_productinfo.remasterVersion, updatetitle_entry_valid ? &title_entry.version:NULL, &selected_remaster_version, versiondir, displayversion);
 					if(ret)
 					{
 						snprintf(status, sizeof(status)-1, "Failed to find your version of\n%s in the config / config loading failed.\n    Error code : %08X", titlename, (unsigned int)ret);
@@ -736,7 +715,7 @@ int main()
 						if(ret==2 || ret==4)strncat(status, " The romfs config file is invalid.", sizeof(status)-1);
 						if(ret==3)
 						{
-							snprintf(status, sizeof(status)-1, "this update-title version(v%u) of %s is not compatible with %s, sorry\n", title_entry.titleVersion, titlename, exploitname);
+							snprintf(status, sizeof(status)-1, "this update-title version(v%u) of %s is not compatible with %s, sorry\n", title_entry.version, titlename, exploitname);
 							next_state = STATE_ERROR;
 							break;
 						}
@@ -891,9 +870,9 @@ int main()
 
 				{
 					// delete file
-					FSUSER_DeleteFile(&saveGameFsHandle, saveGameArchive, FS_makePath(PATH_CHAR, "/payload.bin"));
+					FSUSER_DeleteFile(saveGameArchive, fsMakePath(PATH_ASCII, "/payload.bin"));
 
-					FSUSER_ControlArchive(saveGameFsHandle, saveGameArchive);
+					FSUSER_ControlArchive(saveGameArchive, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
 				}
 
 				{

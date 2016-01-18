@@ -1,10 +1,12 @@
 #ifndef FILESYSTEM_H
 #define FILESYSTEM_H
 
-extern Handle saveGameFsHandle, sdmcFsHandle;
-extern FS_archive saveGameArchive, sdmcArchive;
+extern FS_Archive saveGameArchive, sdmcArchive;
 
-Result filesystemInit();
-Result filesystemExit();
+Result filesystemInit(void);
+Result filesystemExit(void);
+
+void enableHBLHandle(void);
+void disableHBLHandle(void);
 
 #endif
