@@ -68,7 +68,7 @@ Result http_getredirection(char *url, char *out, u32 out_size, char *useragent)
 	Result ret=0;
 	httpcContext context;
 
-	ret = httpcOpenContext(&context, url, 0);
+	ret = httpcOpenContext(&context, HTTPC_METHOD_GET, url, 0);
 	if(ret!=0)return ret;
 
 
@@ -483,7 +483,7 @@ Result parsecopy_saveconfig(char *versiondir, u32 type, int selected_slot)
 
 int main()
 {
-	httpcInit();
+	httpcInit(0);
 
 	gfxInitDefault();
 	gfxSet3D(false);
@@ -681,7 +681,7 @@ int main()
 							break;
 						}
 
-						ret = AM_ListTitles(update_mediatype, 1, &cur_programid_update, &title_entry);
+						ret = AM_GetTitleInfo(update_mediatype, 1, &cur_programid_update, &title_entry);
 						amExit();
 						if(ret==0)
 						{
@@ -813,7 +813,7 @@ int main()
 						break;
 					}
 
-					ret = httpcOpenContext(&context, out_url, 0);
+					ret = httpcOpenContext(&context, HTTPC_METHOD_GET, out_url, 0);
 					if(ret)
 					{
 						sprintf(status, "Failed to open http context\n    Error code : %08X", (unsigned int)ret);

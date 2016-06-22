@@ -11,27 +11,29 @@ FS_Archive saveGameArchive, sdmcArchive;
 Result filesystemInit(void)
 {
 	Result ret;
+	FS_Path sdmcArchivePath, saveGameArchivePath;
+
         if (R_FAILED(ret = srvGetServiceHandleDirect(&fsHandle, "fs:USER"))) return ret;
         if (R_FAILED(ret = FSUSER_Initialize(fsHandle))) return ret;
     
-        fsUseSession(fsHandle, false);
+        fsUseSession(fsHandle);
 
-        sdmcArchive = (FS_Archive){ARCHIVE_SDMC, (FS_Path){PATH_EMPTY, 1, (u8*)""}, 0};
-	if (R_FAILED(ret = FSUSER_OpenArchive(&sdmcArchive))) return ret;
+        sdmcArchivePath = (FS_Path){PATH_EMPTY, 1, (u8*)""};
+	if (R_FAILED(ret = FSUSER_OpenArchive(&sdmcArchive, ARCHIVE_SDMC, sdmcArchivePath))) return ret;
 
-	saveGameArchive = (FS_Archive){ARCHIVE_SAVEDATA, (FS_Path){PATH_EMPTY, 1, (u8*)""}, 0};
-	if (R_FAILED(ret = FSUSER_OpenArchive(&saveGameArchive))) return ret;
+	saveGameArchivePath = (FS_Path){PATH_EMPTY, 1, (u8*)""};
+	if (R_FAILED(ret = FSUSER_OpenArchive(&saveGameArchive, ARCHIVE_SAVEDATA, saveGameArchivePath))) return ret;
 	      
 	return ret;
 }
 
 Result filesystemExit(void)
 {
-	Result ret = FSUSER_CloseArchive(&saveGameArchive);
-        ret |= FSUSER_CloseArchive(&sdmcArchive); //Or-ing error so that if for some reason the first one fails but the second doesn't, we get something back at least.
+	Result ret = 0;
 
-	FSUSER_CloseArchive(&saveGameArchive);
-	FSUSER_CloseArchive(&sdmcArchive);
+	ret = FSUSER_CloseArchive(saveGameArchive);
+	ret |= FSUSER_CloseArchive(sdmcArchive); //Or-ing error so that if for some reason the first one fails but the second doesn't, we get something back at least.
+
         fsEndUseSession();
 
 	return ret;
@@ -44,7 +46,7 @@ void enableHBLHandle(void)
 
 void disableHBLHandle(void)
 {
-	fsUseSession(fsHandle, false);
+	fsUseSession(fsHandle);
 }
 
 
