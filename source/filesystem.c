@@ -5,56 +5,46 @@
 
 #include "filesystem.h"
 
-Handle saveGameFsHandle, sdmcFsHandle;
-FS_archive saveGameArchive, sdmcArchive;
+static Handle fsHandle;
+FS_Archive saveGameArchive, sdmcArchive;
 
-// bypass handle list
-Result _srvGetServiceHandle(Handle* out, const char* name)
-{
-	Result rc = 0;
-
-	u32* cmdbuf = getThreadCommandBuffer();
-	cmdbuf[0] = 0x50100;
-	strcpy((char*) &cmdbuf[1], name);
-	cmdbuf[3] = strlen(name);
-	cmdbuf[4] = 0x0;
-	
-	if((rc = svcSendSyncRequest(*srvGetSessionHandle())))return rc;
-
-	*out = cmdbuf[3];
-	return cmdbuf[1];
-}
-
-Result filesystemInit()
+Result filesystemInit(void)
 {
 	Result ret;
-	
-	ret = _srvGetServiceHandle(&saveGameFsHandle, "fs:USER");
-	if(ret)return ret;
-	
-	ret = FSUSER_Initialize(&saveGameFsHandle);
-	if(ret)return ret;
+        if (R_FAILED(ret = srvGetServiceHandleDirect(&fsHandle, "fs:USER"))) return ret;
+        if (R_FAILED(ret = FSUSER_Initialize(fsHandle))) return ret;
+    
+        fsUseSession(fsHandle, false);
 
-	ret = srvGetServiceHandle(&sdmcFsHandle, "fs:USER");
-	if(ret)return ret;
+        sdmcArchive = (FS_Archive){ARCHIVE_SDMC, (FS_Path){PATH_EMPTY, 1, (u8*)""}, 0};
+	if (R_FAILED(ret = FSUSER_OpenArchive(&sdmcArchive))) return ret;
 
-	saveGameArchive = (FS_archive){0x00000004, (FS_path){PATH_EMPTY, 1, (u8*)""}};
-	ret = FSUSER_OpenArchive(&saveGameFsHandle, &saveGameArchive);
+	saveGameArchive = (FS_Archive){ARCHIVE_SAVEDATA, (FS_Path){PATH_EMPTY, 1, (u8*)""}, 0};
+	if (R_FAILED(ret = FSUSER_OpenArchive(&saveGameArchive))) return ret;
+	      
+	return ret;
+}
 
-	sdmcArchive = (FS_archive){0x00000009, (FS_path){PATH_EMPTY, 1, (u8*)""}};
-	ret = FSUSER_OpenArchive(&sdmcFsHandle, &sdmcArchive);
+Result filesystemExit(void)
+{
+	Result ret = FSUSER_CloseArchive(&saveGameArchive);
+        ret |= FSUSER_CloseArchive(&sdmcArchive); //Or-ing error so that if for some reason the first one fails but the second doesn't, we get something back at least.
+
+	FSUSER_CloseArchive(&saveGameArchive);
+	FSUSER_CloseArchive(&sdmcArchive);
+        fsEndUseSession();
 
 	return ret;
 }
 
-Result filesystemExit()
+void enableHBLHandle(void)
 {
-	Result ret;
-	
-	ret = FSUSER_CloseArchive(&saveGameFsHandle, &saveGameArchive);
-	ret = FSUSER_CloseArchive(&sdmcFsHandle, &sdmcArchive);
-	ret = svcCloseHandle(saveGameFsHandle);
-	ret = svcCloseHandle(sdmcFsHandle);
-
-	return ret;
+	fsEndUseSession(); 
 }
+
+void disableHBLHandle(void)
+{
+	fsUseSession(fsHandle, false);
+}
+
+
