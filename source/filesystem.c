@@ -15,15 +15,17 @@ Result filesystemInit(void)
 
         if (R_FAILED(ret = srvGetServiceHandleDirect(&fsHandle, "fs:USER"))) return ret;
         if (R_FAILED(ret = FSUSER_Initialize(fsHandle))) return ret;
-    
-        fsUseSession(fsHandle);
-
+   
         sdmcArchivePath = (FS_Path){PATH_EMPTY, 1, (u8*)""};
 	if (R_FAILED(ret = FSUSER_OpenArchive(&sdmcArchive, ARCHIVE_SDMC, sdmcArchivePath))) return ret;
 
+	disableHBLHandle();
+
 	saveGameArchivePath = (FS_Path){PATH_EMPTY, 1, (u8*)""};
-	if (R_FAILED(ret = FSUSER_OpenArchive(&saveGameArchive, ARCHIVE_SAVEDATA, saveGameArchivePath))) return ret;
-	      
+	ret = FSUSER_OpenArchive(&saveGameArchive, ARCHIVE_SAVEDATA, saveGameArchivePath);
+
+	enableHBLHandle();
+
 	return ret;
 }
 

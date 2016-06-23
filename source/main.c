@@ -30,6 +30,8 @@ Result write_savedata(char* path, u8* data, u32 size)
 	Result ret = 0;
 	int fail = 0;
 
+	disableHBLHandle();
+
 	ret = FSUSER_OpenFile(&outFileHandle, saveGameArchive, fsMakePath(PATH_ASCII, path), FS_OPEN_CREATE | FS_OPEN_WRITE, 0);
 	if(ret){fail = -8; goto writeFail;}
 
@@ -44,6 +46,8 @@ Result write_savedata(char* path, u8* data, u32 size)
 	writeFail:
 	if(fail)sprintf(status, "failed to write to file : %d\n     %08X %08X", fail, (unsigned int)ret, (unsigned int)bytesWritten);
 	else sprintf(status, "successfully wrote to file !\n     %08X               ", (unsigned int)bytesWritten);
+
+	enableHBLHandle();
 
 	return ret;
 }
@@ -648,9 +652,8 @@ int main()
 						break;
 					}
 
-					enableHBLHandle();
 					ret = FSUSER_GetProductInfo(&cur_productinfo, cur_processid);
-					disableHBLHandle();
+
 					if(R_FAILED(ret))
 					{
 						snprintf(status, sizeof(status)-1, "Failed to get the ProductInfo for the current process.\n    Error code : %08X", (unsigned int)ret);
@@ -689,6 +692,7 @@ int main()
 						}
 					}
 
+					
 					ret = romfsInit();
 					if(ret)
 					{
@@ -870,9 +874,11 @@ int main()
 
 				{
 					// delete file
+					disableHBLHandle();
 					FSUSER_DeleteFile(saveGameArchive, fsMakePath(PATH_ASCII, "/payload.bin"));
 
 					FSUSER_ControlArchive(saveGameArchive, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
+					enableHBLHandle();
 				}
 
 				{

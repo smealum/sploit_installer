@@ -1,5 +1,5 @@
 <shortcut>
-	<executable>/3ds/sploit_installer/sploit_installer.3dsx</executable>
+	<executable>/3ds/install/install.3dsx</executable>
 	<icon>/3ds/sploit_installer_oot3dhax.smdh</icon>
 </shortcut>
 <targets selectable="false">
