@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include <3ds.h>
 
@@ -20,6 +21,57 @@ char regionids_table[7][4] = {//http://3dbrew.org/wiki/Nandrw/sys/SecureInfo_A
 "KOR",
 "TWN"
 };
+
+struct {
+	bool enabled;
+	size_t offset;
+	char path[256];
+} payload_embed;
+
+Result read_savedata(const char* path, void** data, size_t* size)
+{
+	if(!path || !data || !size)return -1;
+
+	Result ret;
+	int fail = 0;
+
+	Handle inFileHandle;
+	u32 bytesRead;
+	u64 inFileSize = 0;
+	void* buffer = NULL;
+
+	disableHBLHandle();
+
+	ret = FSUSER_OpenFile(&inFileHandle, saveGameArchive, fsMakePath(PATH_ASCII, path), FS_OPEN_READ, 0);
+	if(ret){fail = -8; goto readFail;}
+
+	FSFILE_GetSize(inFileHandle, &inFileSize);
+
+	buffer = malloc(inFileSize);
+	if(!buffer){fail = -9; goto readFail;}
+
+	ret = FSFILE_Read(inFileHandle, &bytesRead, 0, buffer, inFileSize);
+	if(ret){fail = -10; goto readFail;}
+
+	FSFILE_Close(inFileHandle);
+
+	readFail:
+	if(fail)
+	{
+		sprintf(status, "failed to read from file : %d\n     %08X %08X", fail, (unsigned int)ret, (unsigned int)bytesRead);
+		if(buffer)free(buffer);
+	}
+	else
+	{
+		sprintf(status, "successfully read from file\n	 %08X              ", (unsigned int)bytesRead);
+		*data = buffer;
+		*size = bytesRead;
+	}
+
+	enableHBLHandle();
+
+	return ret;
+}
 
 Result write_savedata(char* path, u8* data, u32 size)
 {
@@ -347,17 +399,43 @@ Result convert_filepath(char *inpath, char *outpath, u32 outpath_maxsize, int se
 			strptr = strtok(NULL, "@");
 			continue;
 		}
-		if(convstr[1]!='d')return 9;
-		if(convstr[2] < '0' || convstr[2] > '9')return 9;
 
-		memset(tmpstr, 0, sizeof(tmpstr));
-		memset(tmpstr2, 0, sizeof(tmpstr2));
-		snprintf(tmpstr, sizeof(tmpstr)-1, "%s%c%c", "%0", convstr[2], convstr[1]);
-		snprintf(tmpstr2, sizeof(tmpstr2)-1, tmpstr, selected_slot);
+		switch(convstr[1])
+		{
+			case 'd':
+			{
+				if(convstr[2] < '0' || convstr[2] > '9') return 9;
 
-		strncat(outpath, tmpstr2, outpath_maxsize-1);
+				memset(tmpstr, 0, sizeof(tmpstr));
+				memset(tmpstr2, 0, sizeof(tmpstr2));
+				snprintf(tmpstr, sizeof(tmpstr) - 1, "%s%c%c", "%0", convstr[2], convstr[1]);
+				snprintf(tmpstr2, sizeof(tmpstr2) - 1, tmpstr, selected_slot);
 
-		strptr = strtok(&convstr[3], "@");
+				strncat(outpath, tmpstr2, outpath_maxsize - 1);
+
+				strptr = strtok(&convstr[3], "@");
+				break;
+			}
+
+			case 'p':
+			{
+				char tmpstr3[9];
+				for(int i = 0; i < 8; i++)
+				{
+					tmpstr3[i] = convstr[i + 2];
+					if(!isxdigit(tmpstr3[i])) return 9;
+				}
+
+				payload_embed.offset = strtol(tmpstr3, NULL, 16);
+				payload_embed.enabled = true;
+
+				strptr = strtok(&convstr[10], "@");
+				strncpy(payload_embed.path, outpath, sizeof(payload_embed.path) - 1);
+				break;
+			}
+
+			default: return 9;
+		}
 	}
 
 	return 0;
@@ -886,7 +964,35 @@ int main()
 				}
 
 				{
-					Result ret = write_savedata("/payload.bin", payload_buf, payload_size);
+					Result ret;
+
+					if(payload_embed.enabled)
+					{
+						void* buffer = NULL;
+						size_t size = 0;
+						ret = read_savedata(payload_embed.path, &buffer, &size);
+						if(ret)
+						{
+							sprintf(status, "Failed to embed payload\n    Error code : %08X", (unsigned int)ret);
+							next_state = STATE_ERROR;
+							break;
+						}
+						if((payload_embed.offset + payload_size + sizeof(u32)) >= size)
+						{
+							sprintf(status, "Failed to embed payload (too large)\n    0x%lX >= 0x%X", (payload_embed.offset + payload_size + sizeof(u32)), size);
+							next_state = STATE_ERROR;
+							break;
+						}
+
+						*(u32*)(buffer + payload_embed.offset) = payload_size;
+						memcpy(buffer + payload_embed.offset + sizeof(u32), payload_buf, payload_size);
+						ret = write_savedata(payload_embed.path, buffer, size);
+
+						free(buffer);
+					}
+					else
+						ret = write_savedata("/payload.bin", payload_buf, payload_size);
+
 					if(ret)
 					{
 						sprintf(status, "Failed to install payload\n    Error code : %08X", (unsigned int)ret);

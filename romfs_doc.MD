@@ -21,4 +21,4 @@ This contains the "Old3DS"/"New3DS" and/or "common" directories mentioned in the
 * {inputrelative_savefilepath}={outputabsolute_savefilepath}
 
 This lists the file(s) which get copied into the title's savedata. The input/output filepaths in this config can include "@!dX". That "@!dX" string will be replaced with the output of: snprintf(..., "%0Xd", selected_save_slot), where selected_save_slot is 0-based. Hence, "@!d1" == "%01d", "@!d2" == "%02d", and so on.
-
+A file containing "@!pX" will have the otherapp payload embedded within it, at the offset "X", with a u32 payload size preceding the actual payload.
