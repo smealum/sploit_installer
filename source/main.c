@@ -88,15 +88,18 @@ Result http_getredirection(char *url, char *out, u32 out_size, char *useragent)
 
 	httpcCloseContext(&context);
 
-	return 0;
+	return ret;
 }
 
-Result http_download(httpcContext *context, u8** out_buf, u32* out_size)
+Result http_download(httpcContext *context, u8** out_buf, u32* out_size, char *useragent)
 {
 	Result ret=0;
 	u32 statuscode=0;
 	u32 contentsize=0;
 	u8 *buf;
+
+	ret = httpcAddRequestHeaderField(context, "User-Agent", useragent);
+	if(ret!=0)return ret;
 
 	ret = httpcBeginRequest(context);
 	if(ret!=0)return ret;
@@ -804,6 +807,9 @@ int main()
 					static char in_url[512];
 					static char out_url[512];
 
+					memset(in_url, 0, sizeof(in_url));
+					memset(out_url, 0, sizeof(out_url));
+
 					sprintf(in_url, "http://smea.mtheall.com/get_payload.php?version=%s-%d-%d-%d-%d-%s", firmware_version[0]?"NEW":"OLD", firmware_version[1], firmware_version[2], firmware_version[3], firmware_version[4], regionids_table[firmware_version[5]]);
 
 					memset(useragent, 0, sizeof(useragent));
@@ -825,7 +831,7 @@ int main()
 						break;
 					}
 
-					ret = http_download(&context, &payload_buf, &payload_size);
+					ret = http_download(&context, &payload_buf, &payload_size, useragent);
 					if(ret)
 					{
 						sprintf(status, "Failed to download payload\n    Error code : %08X", (unsigned int)ret);
