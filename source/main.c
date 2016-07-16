@@ -519,7 +519,7 @@ int main()
 	int firmware_maxnum;
 
 	int pos;
-	
+
 	u8* payload_buf = NULL;
 	u32 payload_size = 0;
 
@@ -533,7 +533,7 @@ int main()
 
 	OS_VersionBin nver_versionbin, cver_versionbin;
 	u8 region=0;
-	u8 new3dsflag = 0;
+	bool new3dsflag = 0;
 
 	unsigned int flags_bitmask = 0;
 
@@ -664,9 +664,7 @@ int main()
 						break;
 					}
 
-					aptOpenSession();
 					ret = APT_GetProgramID(&cur_programid);
-					aptCloseSession();
 
 					if(R_FAILED(ret))
 					{
@@ -695,7 +693,7 @@ int main()
 						}
 					}
 
-					
+
 					ret = romfsInit();
 					if(ret)
 					{
@@ -896,7 +894,7 @@ int main()
 						break;
 					}
 
-					next_state = STATE_INSTALLED_PAYLOAD;	
+					next_state = STATE_INSTALLED_PAYLOAD;
 				}
 				break;
 			case STATE_INSTALLED_PAYLOAD:
