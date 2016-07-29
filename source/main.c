@@ -980,7 +980,6 @@ int main()
 				{
 					if(exploit_titleconfig.saveformat.enabled)//This block is based on code from salt_sploit_installer.
 					{
-						printf("Formatting...\n");
 						disableHBLHandle();
 						Result ret = FSUSER_FormatSaveData(ARCHIVE_SAVEDATA, (FS_Path){PATH_EMPTY, 1, (u8*)""}, 0x200, exploit_titleconfig.saveformat.directories, exploit_titleconfig.saveformat.files, exploit_titleconfig.saveformat.directoryBuckets, exploit_titleconfig.saveformat.fileBuckets, exploit_titleconfig.saveformat.duplicateData);
 						FSUSER_ControlArchive(saveGameArchive, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
