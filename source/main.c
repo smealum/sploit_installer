@@ -28,6 +28,20 @@ struct {
 	char path[256];
 } payload_embed;
 
+struct {
+	struct {
+		bool enabled;
+		u32 directories;
+		u32 files;
+		u32 directoryBuckets;
+		u32 fileBuckets;
+		bool duplicateData;
+	} saveformat;
+
+	char versiondir[64];
+	char displayversion[64];
+} exploit_titleconfig;
+
 Result read_savedata(const char* path, void** data, size_t* size)
 {
 	if(!path || !data || !size)return -1;
@@ -262,13 +276,20 @@ Result load_exploitlist_config(char *filepath, u64 *cur_programid, char *out_exp
 	return ret;
 }
 
-Result load_exploitconfig(char *exploitname, u64 *cur_programid, u32 app_remaster_version, u16 *update_titleversion, u32 *installed_remaster_version, char *out_versiondir, char *out_displayversion)
+Result load_exploitconfig(char *exploitname, u64 *cur_programid, u32 app_remaster_version, u16 *update_titleversion, u32 *installed_remaster_version)
 {
 	FILE *f;
 	int len;
 	int ret = 2;
 	int stage = 0;
 	unsigned int tmpver, tmpremaster;
+
+	unsigned int directories=0;
+	unsigned int files=0;
+	unsigned int directoryBuckets=0;
+	unsigned int fileBuckets=0;
+	unsigned int duplicateData=1;
+
 	char *strptr;
 	char *namestr = NULL, *valuestr = NULL;
 	char filepath[256];
@@ -296,8 +317,10 @@ Result load_exploitconfig(char *exploitname, u64 *cur_programid, u32 app_remaste
 		len = strlen(line);
 		if(len==0)continue;
 
-		if(stage==1 || stage==3)
+		if(stage==1 || stage==3 || stage==5)
 		{
+			if(line[0]=='[' && line[len-1]==']')break;
+
 			strptr = strtok(line, "=");
 			if(strptr==NULL)continue;
 			namestr = strptr;
@@ -360,13 +383,39 @@ Result load_exploitconfig(char *exploitname, u64 *cur_programid, u32 app_remaste
 					strptr = strtok(valuestr, "@");
 					if(strptr==NULL)break;
 
-					strncpy(out_versiondir, strptr, 63);
+					strncpy(exploit_titleconfig.versiondir, strptr, 63);
 
 					strptr = strtok(NULL, "@");
 					if(strptr==NULL)break;
-					strncpy(out_displayversion, strptr, 63);
+					strncpy(exploit_titleconfig.displayversion, strptr, 63);
 
 					ret = 0;
+
+					stage = 4;
+					fseek(f, 0, SEEK_SET);
+				}
+			}
+		}
+		else if(stage==4)
+		{
+			if(strcmp(line, "[config]")==0)
+			{
+				stage = 5;
+			}
+		}
+		else if(stage==5)
+		{
+			if(strcmp(namestr, "saveformat")==0)
+			{
+				if(sscanf(valuestr, "%u,%u,%u,%u,%u", &directories, &files, &directoryBuckets, &fileBuckets, &duplicateData)==5)
+				{
+					exploit_titleconfig.saveformat.enabled = true;
+
+					exploit_titleconfig.saveformat.directories = directories;
+					exploit_titleconfig.saveformat.files = files;
+					exploit_titleconfig.saveformat.directoryBuckets = directoryBuckets;
+					exploit_titleconfig.saveformat.fileBuckets = fileBuckets;
+					exploit_titleconfig.saveformat.duplicateData = duplicateData;
 
 					break;
 				}
@@ -617,16 +666,14 @@ int main()
 
 	char exploitname[64];
 	char titlename[64];
-	char versiondir[64];
-	char displayversion[64];
 	char useragent[64];
 
 	memset(firmware_version, 0, sizeof(firmware_version));
 
 	memset(exploitname, 0, sizeof(exploitname));
 	memset(titlename, 0, sizeof(titlename));
-	memset(versiondir, 0, sizeof(versiondir));
-	memset(displayversion, 0, sizeof(displayversion));
+
+	memset(&exploit_titleconfig, 0, sizeof(exploit_titleconfig));
 
 	while (aptMainLoop())
 	{
@@ -790,7 +837,7 @@ int main()
 						break;
 					}
 
-					ret = load_exploitconfig(exploitname, &cur_programid, cur_productinfo.remasterVersion, updatetitle_entry_valid ? &title_entry.version:NULL, &selected_remaster_version, versiondir, displayversion);
+					ret = load_exploitconfig(exploitname, &cur_programid, cur_productinfo.remasterVersion, updatetitle_entry_valid ? &title_entry.version:NULL, &selected_remaster_version);
 					if(ret)
 					{
 						snprintf(status, sizeof(status)-1, "Failed to find your version of\n%s in the config / config loading failed.\n    Error code : %08X", titlename, (unsigned int)ret);
@@ -837,7 +884,7 @@ int main()
 				{
 					if(hidKeysDown() & KEY_A)next_state = STATE_SELECT_FIRMWARE;
 
-					printf("           Auto-detected %s version : %s  \n    Press A to continue.", titlename, displayversion);
+					printf("           Auto-detected %s version : %s  \n    Press A to continue.", titlename, exploit_titleconfig.displayversion);
 				}
 				break;
 			case STATE_SELECT_FIRMWARE:
@@ -931,9 +978,25 @@ int main()
 				break;
 			case STATE_INSTALL_PAYLOAD:
 				{
+					if(exploit_titleconfig.saveformat.enabled)//This block is based on code from salt_sploit_installer.
+					{
+						printf("Formatting...\n");
+						disableHBLHandle();
+						Result ret = FSUSER_FormatSaveData(ARCHIVE_SAVEDATA, (FS_Path){PATH_EMPTY, 1, (u8*)""}, 0x200, exploit_titleconfig.saveformat.directories, exploit_titleconfig.saveformat.files, exploit_titleconfig.saveformat.directoryBuckets, exploit_titleconfig.saveformat.fileBuckets, exploit_titleconfig.saveformat.duplicateData);
+						FSUSER_ControlArchive(saveGameArchive, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
+						enableHBLHandle();
+						filesystemExit();
+						filesystemInit();
+						if(ret)
+						{
+							sprintf(status, "Failed to format savedata.\n    Error code: %08lX", ret);
+							next_state = STATE_ERROR;
+							break;
+						}
+					}
 					if(flags_bitmask & 0x2)
 					{
-						Result ret = parsecopy_saveconfig(versiondir, firmware_version[0], selected_slot);
+						Result ret = parsecopy_saveconfig(exploit_titleconfig.versiondir, firmware_version[0], selected_slot);
 						if(ret)
 						{
 							sprintf(status, "Failed to install the savefile(s) with romfs %s savedir.\n    Error code : %08X", firmware_version[0]==0?"Old3DS":"New3DS", (unsigned int)ret);
@@ -944,7 +1007,7 @@ int main()
 
 					if(flags_bitmask & 0x4)
 					{
-						Result ret = parsecopy_saveconfig(versiondir, 2, selected_slot);
+						Result ret = parsecopy_saveconfig(exploit_titleconfig.versiondir, 2, selected_slot);
 						if(ret)
 						{
 							sprintf(status, "Failed to install the savefile(s) with romfs %s savedir.\n    Error code : %08X", "common", (unsigned int)ret);

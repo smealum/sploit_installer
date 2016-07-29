@@ -10,7 +10,7 @@ Flags bitmasks:
 # romfs/{exploitname}/{programID}/
 The "config.ini" file in this directory contains the list of versions for this title, this is used by sploit_installer for automatically detecting which version to use.  
 
-"[updatetitle_versions]" section(optional):
+"[updatetitle_versions]" section(required when an update-title is detected):
 * v{titleversion}={remaster_version}
 
 "[remaster_versions]" section(required):
