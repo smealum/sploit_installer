@@ -16,6 +16,9 @@ The "config.ini" file in this directory contains the list of versions for this t
 "[remaster_versions]" section(required):
 * {remaster_version}={absolute directory-path for this version}@{display version}
 
+"[config]" section(optional):
+* "saveformat=%u,%u,%u,%u,%u", where each entry is: directories, files, directoryBuckets, fileBuckets, and duplicateData. See ctrulib fs.h FSUSER_FormatSaveData(). When used, this enables formatting the savedata before writing anything to it.
+
 # version-directory
 This contains the "Old3DS"/"New3DS" and/or "common" directories mentioned in the above "romfs/exploitlist_config" section. Those directories contain config.ini:
 * {inputrelative_savefilepath}={outputabsolute_savefilepath}
