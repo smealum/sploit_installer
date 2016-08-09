@@ -170,7 +170,7 @@ Result http_download(httpcContext *context, u8** out_buf, u32* out_size, char *u
 	ret = httpcBeginRequest(context);
 	if(ret!=0)return ret;
 
-	ret = httpcGetResponseStatusCode(context, &statuscode, 0);
+	ret = httpcGetResponseStatusCode(context, &statuscode);
 	if(ret!=0)return ret;
 
 	if(statuscode!=200)return -2;
