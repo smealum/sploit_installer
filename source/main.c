@@ -658,6 +658,11 @@ int main()
 	FS_ProductInfo cur_productinfo;
 	AM_TitleEntry title_entry;
 
+	u64 menu_programid = 0;
+	AM_TitleEntry menu_title_entry;
+
+	bool sysinfo_overridden = false, allow_use_menuver = false;
+
 	OS_VersionBin nver_versionbin, cver_versionbin;
 	u8 region=0;
 	bool new3dsflag = 0;
@@ -860,6 +865,13 @@ int main()
 						break;
 					}
 
+					ret = amInit();
+					if(ret==0)ret = APT_GetAppletInfo(APPID_HOMEMENU, &menu_programid, NULL, NULL, NULL, NULL);
+					if(ret==0)ret = AM_GetTitleInfo(MEDIATYPE_NAND, 1, &menu_programid, &menu_title_entry);
+					amExit();
+
+					if(ret==0)allow_use_menuver = true;
+
 					next_state = STATE_INITIAL;
 				}
 				break;
@@ -895,8 +907,16 @@ int main()
 					if(firmware_selected_value < 0) firmware_selected_value = 0;
 					if(firmware_selected_value > 5) firmware_selected_value = 5;
 
-					if(hidKeysDown() & KEY_UP)firmware_version[firmware_selected_value]++;
-					if(hidKeysDown() & KEY_DOWN)firmware_version[firmware_selected_value]--;
+					if(hidKeysDown() & KEY_UP)
+					{
+						firmware_version[firmware_selected_value]++;
+						sysinfo_overridden = true;
+					}
+					if(hidKeysDown() & KEY_DOWN)
+					{
+						firmware_version[firmware_selected_value]--;
+						sysinfo_overridden = true;
+					}
 
 					firmware_maxnum = 256;
 					if(firmware_selected_value==0)firmware_maxnum = 2;
@@ -929,11 +949,19 @@ int main()
 					httpcContext context;
 					static char in_url[512];
 					static char out_url[512];
+					static char tmpstr[256];
 
 					memset(in_url, 0, sizeof(in_url));
 					memset(out_url, 0, sizeof(out_url));
+					memset(tmpstr, 0, sizeof(tmpstr));
 
-					sprintf(in_url, "http://smea.mtheall.com/get_payload.php?version=%s-%d-%d-%d-%d-%s", firmware_version[0]?"NEW":"OLD", firmware_version[1], firmware_version[2], firmware_version[3], firmware_version[4], regionids_table[firmware_version[5]]);
+					snprintf(in_url, sizeof(in_url)-1, "http://smea.mtheall.com/get_payload.php?version=%s-%d-%d-%d-%d-%s", firmware_version[0]?"NEW":"OLD", firmware_version[1], firmware_version[2], firmware_version[3], firmware_version[4], regionids_table[firmware_version[5]]);
+
+					if(!sysinfo_overridden && allow_use_menuver)//Send the actual Home Menu title-version in the request URL, when the user didn't override the system-info. This is needed for when the title-version is different from what it should be with the current CVer. With this the server script will determine the Home Menu portion of the output URL using the input menuver instead of the system-version.
+					{
+						snprintf(tmpstr, sizeof(tmpstr)-1, "&menuver=%u", menu_title_entry.version);
+						strncat(in_url, tmpstr, sizeof(in_url)-1);
+					}
 
 					memset(useragent, 0, sizeof(useragent));
 					snprintf(useragent, sizeof(useragent)-1, "sploit_installer-%s", exploitname);
